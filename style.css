@@ -197,3 +197,27 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* Two pages: cats / dogs. Large tap targets for phones. */
+.site-nav { display: flex; align-items: center; gap: 7px; padding: 5px; border: 1px solid var(--border); background: rgba(255,255,255,.88); border-radius: 999px; }
+.nav-link { text-decoration: none; color: #8f858c; border-radius: 999px; padding: 12px 18px; font-size: 13px; font-weight: 900; white-space: nowrap; transition: background .2s, color .2s; }
+.nav-link:hover { color: var(--orange-deep); background: #fff5ef; }
+.nav-link.is-active { background: #ffeadc; color: #d96f4c; }
+.dogs-theme { --orange: #8a80e8; --orange-deep: #6f63c9; --peach: #e7e4ff; --cream: #f9f8ff; }
+.dogs-theme .brand-icon { background: #ece9ff; }
+.dogs-theme .nav-link.is-active { background: #ece9ff; color: #6152bd; }
+.dogs-theme .nav-link:hover { color: #6152bd; background: #f2efff; }
+.dogs-theme .ambient-one { background: radial-gradient(circle, #e8e4ff 0%, transparent 70%); }
+.dogs-theme .ambient-two { background: radial-gradient(circle, #f4e9ff 0%, transparent 70%); }
+.dogs-theme .sticker-top { background: #eceaff; color: #6c5dc0; }
+.dogs-theme .card-count, .dogs-theme .collection-count { color: #7564c7; background: #efedff; }
+.dogs-theme .btn-secondary { background: #f0eeff; color: #7365c9; }
+.dogs-theme .btn-secondary:hover:not(:disabled) { background: #e6e2ff; }
+.dogs-theme .tab.is-active { color: #7564c7; }
+.dogs-theme .gallery-item.is-current { border-color: #8a80e8; }
+@media (max-width: 760px) {
+  .topbar { height: auto; min-height: 84px; padding-top: 16px; padding-bottom: 12px; gap: 10px; flex-wrap: wrap; }
+  .topbar-pill { display: none; }
+  .site-nav { width: 100%; order: 3; }
+  .nav-link { flex: 1; text-align: center; padding: 12px 11px; font-size: 13px; }
+}

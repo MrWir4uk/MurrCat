@@ -1,8 +1,9 @@
 /*
  * МурКотик — маленький сервер на Node.js без зовнішніх залежностей.
- * /api/cat          — випадковий котик із TheCatAPI
- * /api/photo/:id    — показ фото (той самий домен, працює на телефоні)
- * /api/photo/:id?download=1 — завантаження оригінального файлу
+ * /api/cat             — випадковий котик із TheCatAPI
+ * /api/dog             — випадковий песик із TheDogAPI
+ * /api/photo/:id       — фото котика, ?download=1 — завантаження
+ * /api/dog-photo/:id   — фото песика, ?download=1 — завантаження
  */
 'use strict';
 
@@ -15,15 +16,17 @@ const { pipeline } = require('node:stream/promises');
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = '0.0.0.0';
 const ROOT = __dirname;
-const API_BASE = 'https://api.thecatapi.com/v1/images';
+const API_BASE = { cat: 'https://api.thecatapi.com/v1/images', dog: 'https://api.thedogapi.com/v1/images' };
 const photoUrls = new Map();
 const ID_PATTERN = /^[a-zA-Z0-9_-]{1,100}$/;
 
 const staticPages = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
   ['/index.html', ['index.html', 'text/html; charset=utf-8']],
+  ['/dog.html', ['dog.html', 'text/html; charset=utf-8']],
   ['/style.css', ['style.css', 'text/css; charset=utf-8']],
   ['/script.js', ['script.js', 'application/javascript; charset=utf-8']],
+  ['/dog.js', ['dog.js', 'application/javascript; charset=utf-8']],
   ['/favicon.svg', ['favicon.svg', 'image/svg+xml']],
 ]);
 
@@ -41,51 +44,52 @@ async function readRemoteJson(url) {
     signal: AbortSignal.timeout(12000),
     headers: { Accept: 'application/json', 'User-Agent': 'MurrCat/1.0' },
   });
-  if (!response.ok) throw new Error(`TheCatAPI: HTTP ${response.status}`);
+  if (!response.ok) throw new Error(`Animal API: HTTP ${response.status}`);
   return response.json();
 }
 
-function safePhotoUrl(input) {
+function safePhotoUrl(input, type) {
   const url = new URL(input);
-  // Адресу отримуємо від TheCatAPI, але обмежуємо домен, щоб сервер не
-  // перетворився на відкритий проксі для довільних сайтів.
-  if (url.protocol !== 'https:' || !(url.hostname === 'thecatapi.com' || url.hostname.endsWith('.thecatapi.com'))) {
+  // Не дозволяємо передати довільну адресу на наш сервер (захист проксі).
+  const domain = type === 'dog' ? 'thedogapi.com' : 'thecatapi.com';
+  if (url.protocol !== 'https:' || !(url.hostname === domain || url.hostname.endsWith('.' + domain))) {
     throw new Error('Непідтримуване джерело зображення');
   }
   return url.toString();
 }
 
-function rememberPhoto(id, url) {
-  photoUrls.set(id, safePhotoUrl(url));
+function rememberPhoto(type, id, url) {
+  photoUrls.set(`${type}:${id}`, safePhotoUrl(url, type));
   if (photoUrls.size > 200) photoUrls.delete(photoUrls.keys().next().value);
 }
 
-async function catHandler(res) {
-  const data = await readRemoteJson(`${API_BASE}/search?limit=1&mime_types=jpg,png`);
-  const cat = Array.isArray(data) && data[0];
-  if (!cat || !ID_PATTERN.test(cat.id) || typeof cat.url !== 'string') {
-    throw new Error('TheCatAPI повернув некоректні дані');
+async function animalHandler(res, type) {
+  const data = await readRemoteJson(`${API_BASE[type]}/search?limit=1&mime_types=jpg,png`);
+  const animal = Array.isArray(data) && data[0];
+  if (!animal || !ID_PATTERN.test(animal.id) || typeof animal.url !== 'string') {
+    throw new Error(`${type} API повернув некоректні дані`);
   }
-  rememberPhoto(cat.id, cat.url);
-  sendJson(res, 200, { id: cat.id, width: cat.width ?? null, height: cat.height ?? null });
+  rememberPhoto(type, animal.id, animal.url);
+  sendJson(res, 200, { id: animal.id, width: animal.width ?? null, height: animal.height ?? null });
 }
 
-async function photoHandler(res, id, download) {
+async function photoHandler(res, id, download, kind) {
   if (!ID_PATTERN.test(id)) {
     sendJson(res, 400, { error: 'Неправильний код фотографії' });
     return;
   }
 
-  let url = photoUrls.get(id);
+  const key = `${kind}:${id}`;
+  let url = photoUrls.get(key);
   if (!url) {
-    // Завдяки цьому збережені улюблені фото працюють навіть після перезапуску Render.
-    const cat = await readRemoteJson(`${API_BASE}/${encodeURIComponent(id)}`);
-    if (!cat || !cat.url) {
-      sendJson(res, 404, { error: 'Котика не знайдено' });
+    // Відновлює улюблені фото з API після перезапуску Render.
+    const animal = await readRemoteJson(`${API_BASE[kind]}/${encodeURIComponent(id)}`);
+    if (!animal || !animal.url) {
+      sendJson(res, 404, { error: 'Фото не знайдено' });
       return;
     }
-    rememberPhoto(id, cat.url);
-    url = photoUrls.get(id);
+    rememberPhoto(kind, id, animal.url);
+    url = photoUrls.get(key);
   }
 
   const response = await fetch(url, {
@@ -112,7 +116,7 @@ async function photoHandler(res, id, download) {
     'Content-Type': type,
     'X-Content-Type-Options': 'nosniff',
     'Cache-Control': download ? 'no-store' : 'public, max-age=86400',
-    'Content-Disposition': `${download ? 'attachment' : 'inline'}; filename="kotyk-${id}.${supported[type]}"`,
+    'Content-Disposition': `${download ? 'attachment' : 'inline'}; filename="${kind === 'dog' ? 'pesyk' : 'kotyk'}-${id}.${supported[type]}"`,
   };
   const contentLength = response.headers.get('content-length');
   if (contentLength && /^\d+$/.test(contentLength)) headers['Content-Length'] = contentLength;
@@ -134,13 +138,14 @@ const server = http.createServer(async (req, res) => {
       res.end('OK');
       return;
     }
-    if (url.pathname === '/api/cat') {
-      await catHandler(res);
+    if (url.pathname === '/api/cat' || url.pathname === '/api/dog') {
+      await animalHandler(res, url.pathname === '/api/dog' ? 'dog' : 'cat');
       return;
     }
-    if (url.pathname.startsWith('/api/photo/')) {
-      const id = url.pathname.slice('/api/photo/'.length);
-      await photoHandler(res, id, url.searchParams.get('download') === '1');
+    if (url.pathname.startsWith('/api/photo/') || url.pathname.startsWith('/api/dog-photo/')) {
+      const dog = url.pathname.startsWith('/api/dog-photo/');
+      const id = url.pathname.slice(dog ? '/api/dog-photo/'.length : '/api/photo/'.length);
+      await photoHandler(res, id, url.searchParams.get('download') === '1', dog ? 'dog' : 'cat');
       return;
     }
     const file = staticPages.get(url.pathname);
