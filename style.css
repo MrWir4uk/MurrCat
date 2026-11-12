@@ -221,3 +221,16 @@ button:disabled { cursor: not-allowed; opacity: .48; }
   .site-nav { width: 100%; order: 3; }
   .nav-link { flex: 1; text-align: center; padding: 12px 11px; font-size: 13px; }
 }
+
+.chicken-theme { --orange: #d99a20; --orange-deep: #b97e10; --peach: #fff1cb; --cream: #fffaf0; }
+.chicken-theme .brand-icon { background: #fff0ca; }
+.chicken-theme .nav-link.is-active { background: #fff0ca; color: #a56600; }
+.chicken-theme .nav-link:hover { color: #a56600; background: #fff6dd; }
+.chicken-theme .ambient-one { background: radial-gradient(circle, #fff2cd 0%, transparent 70%); }
+.chicken-theme .ambient-two { background: radial-gradient(circle, #fff7e4 0%, transparent 70%); }
+.chicken-theme .sticker-top { background: #fff1cc; color: #9d6709; }
+.chicken-theme .card-count, .chicken-theme .collection-count { color: #b57907; background: #fff4d8; }
+.chicken-theme .btn-secondary { background: #fff5de; color: #a86f00; }
+.chicken-theme .btn-secondary:hover:not(:disabled) { background: #ffefd0; }
+.chicken-theme .tab.is-active { color: #b57907; }
+.chicken-theme .gallery-item.is-current { border-color: #d99a20; }
