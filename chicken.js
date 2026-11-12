@@ -31,11 +31,27 @@
     viewerTip: $('#viewer-tip'),
   };
 
+  // The Commons API is called from the visitor's browser, not from a shared Render IP.
+  // We fetch batches once per day, then pick locally without a new API call per click.
   const STORAGE_RECENT = 'murrcat-chickens-recent-v1';
   const STORAGE_FAVORITES = 'murrcat-chickens-favorites-v1';
+  const STORAGE_POOL = 'murrcat-poultry-photo-pool-v2';
   const MAX_RECENT = 18;
   const MAX_FAVORITES = 40;
-  const validId = (id) => typeof id === 'string' && /^[a-zA-Z0-9_-]{1,160}$/.test(id);
+  const POOL_TTL = 24 * 60 * 60 * 1000;
+  const RETRY_DELAY = 2 * 60 * 1000;
+
+  function validId(src) {
+    if (typeof src !== 'string' || src.length > 2000) return false;
+    try {
+      const url = new URL(src);
+      return url.protocol === 'https:' &&
+        url.hostname === 'upload.wikimedia.org' &&
+        url.pathname.startsWith('/wikipedia/commons/');
+    } catch {
+      return false;
+    }
+  }
 
   function readSaved(key, max) {
     try {
@@ -51,6 +67,91 @@
     try { localStorage.setItem(key, JSON.stringify(values)); } catch { /* Приватний режим браузера */ }
   }
 
+  function readPool() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_POOL) || 'null');
+      if (!saved || !Array.isArray(saved.photos)) return { photos: [], savedAt: 0 };
+      return {
+        photos: [...new Set(saved.photos.filter(validId))].slice(0, 120),
+        savedAt: Number(saved.savedAt) || 0,
+      };
+    } catch {
+      return { photos: [], savedAt: 0 };
+    }
+  }
+
+  const stored = readPool();
+  let photoPool = stored.photos;
+  let poolSavedAt = stored.savedAt;
+  let poolPromise = null;
+  let retryAt = 0;
+
+  async function fetchCategory(title) {
+    // generator=categorymembers + imageinfo returns up to 50 actual image URLs
+    // in one request, with official MediaWiki API CORS (origin=*).
+    const params = new URLSearchParams({
+      action: 'query',
+      format: 'json',
+      origin: '*',
+      generator: 'categorymembers',
+      gcmtitle: title,
+      gcmtype: 'file',
+      gcmlimit: '50',
+      prop: 'imageinfo',
+      iiprop: 'url|mime|size',
+    });
+    const response = await fetch(`https://commons.wikimedia.org/w/api.php?${params}`, {
+      cache: 'default',
+      signal: AbortSignal.timeout(13000),
+    });
+    if (!response.ok) throw new Error(`Wikimedia: HTTP ${response.status}`);
+    const data = await response.json();
+    const pages = Object.values(data?.query?.pages || {});
+    return pages.map((page) => page?.imageinfo?.[0]).filter((item) =>
+      item && ['image/jpeg', 'image/png', 'image/webp'].includes(item.mime) &&
+      validId(item.url) && (item.width || 0) >= 400 && (item.height || 0) >= 300
+    ).map((item) => item.url);
+  }
+
+  async function refreshPool() {
+    // Only 2 API requests to build an entire gallery, not 2 per photo.
+    const results = await Promise.allSettled([
+      fetchCategory('Category:Hens'),
+      fetchCategory('Category:Roosters'),
+    ]);
+    let fetched = results.flatMap((result) => result.status === 'fulfilled' ? result.value : []);
+
+    // Fallback category if both narrow categories have no usable photos.
+    if (!fetched.length) {
+      try { fetched = await fetchCategory('Category:Chickens'); } catch { /* Keep cached photos */ }
+    }
+    if (fetched.length) {
+      photoPool = [...new Set([...fetched, ...photoPool])].slice(0, 120);
+      poolSavedAt = Date.now();
+      try { localStorage.setItem(STORAGE_POOL, JSON.stringify({ photos: photoPool, savedAt: poolSavedAt })); } catch { /* no storage */ }
+    } else {
+      retryAt = Date.now() + RETRY_DELAY;
+      if (!photoPool.length) throw new Error('Wikimedia зараз обмежує запити (429) або не має доступних фото');
+    }
+    return photoPool;
+  }
+
+  async function ensurePool() {
+    const fresh = photoPool.length && Date.now() - poolSavedAt < POOL_TTL;
+    if (fresh) return photoPool;
+    if (retryAt && Date.now() < retryAt) {
+      if (photoPool.length) return photoPool;
+      throw new Error('Спробуй трохи пізніше — тимчасовий ліміт Wikimedia');
+    }
+    if (!poolPromise) poolPromise = refreshPool().finally(() => { poolPromise = null; });
+    try {
+      await poolPromise;
+    } catch (error) {
+      if (!photoPool.length) throw error;
+    }
+    return photoPool;
+  }
+
   let recent = readSaved(STORAGE_RECENT, MAX_RECENT);
   let favorites = readSaved(STORAGE_FAVORITES, MAX_FAVORITES);
   let currentId = null;
@@ -58,8 +159,10 @@
   let requestInProgress = false;
   let generatedCount = 0;
 
-  function photoUrl(id) { return `/api/chicken-photo/${encodeURIComponent(id)}`; }
-  function downloadUrl(id) { return `${photoUrl(id)}?download=1`; }
+  // Images are displayed directly from Wikimedia's CDN. Render is used only
+  // for the attachment/download response, so its Wikimedia API 429 goes away.
+  function photoUrl(src) { return src; }
+  function downloadUrl(src) { return `/api/chicken-photo?src=${encodeURIComponent(src)}&download=1`; }
 
   function setMessage(message, error = false) {
     elements.status.textContent = message;
@@ -118,19 +221,30 @@
     setMessage('Шукаємо курочку або півня...');
 
     try {
-      const response = await fetch('/api/chicken', { cache: 'no-store' });
-      if (!response.ok) throw new Error(`Сервер відповів ${response.status}`);
-      const data = await response.json();
-      if (!validId(data.id)) throw new Error('Неправильна відповідь сервера');
-      await preloadPhoto(data.id);
+      const photos = await ensurePool();
+      if (!photos.length) throw new Error('Добірка фотографій поки порожня');
+      // Pick another photo if possible; retry if a Wikimedia file was removed.
+      const candidates = photos.filter((src) => src !== currentId);
+      const list = [...(candidates.length ? candidates : photos)];
+      let chosen = null;
+      for (let attempt = 0; attempt < Math.min(4, list.length); attempt += 1) {
+        const index = Math.floor(Math.random() * list.length);
+        const src = list.splice(index, 1)[0];
+        try {
+          await preloadPhoto(src);
+          chosen = src;
+          break;
+        } catch { /* Try another photo */ }
+      }
+      if (!chosen) throw new Error('Зображення із Wikimedia зараз не завантажуються');
       generatedCount += 1;
-      recent = [data.id, ...recent.filter((id) => id !== data.id)].slice(0, MAX_RECENT);
+      recent = [chosen, ...recent.filter((id) => id !== chosen)].slice(0, MAX_RECENT);
       save(STORAGE_RECENT, recent);
-      showCat(data.id);
+      showCat(chosen);
     } catch (error) {
-      console.error('Не вдалося завантажити пташку:', error);
-      setMessage('Курочка або півень десь забарилися 🐔 Перевір інтернет і натисни «Ще пташку!».', true);
-      if (!currentId) elements.placeholder.querySelector('span:last-child').textContent = 'Спробуй ще раз, будь ласка.';
+      console.error('Не вдалося завантажити курку або півня:', error);
+      setMessage('Фото тимчасово недоступні. Якщо Wikimedia обмежує запити, спробуй ще раз пізніше 🐔', true);
+      if (!currentId) elements.placeholder.querySelector('span:last-child').textContent = 'Спробуй ще раз трохи пізніше.';
     } finally {
       setBusy(false);
     }
@@ -138,11 +252,11 @@
 
   function downloadCurrent() {
     if (!currentId) return;
-    // Фото повертається нашим сервером із заголовком Content-Disposition: attachment.
-    // Тому воно завантажується і на Render, а не просто відкривається в іншій вкладці.
+    // Render лише передає файл із Wikimedia CDN для завантаження,
+    // API Wikimedia із Render більше не використовується.
     const link = document.createElement('a');
     link.href = downloadUrl(currentId);
-    link.download = `kura-${currentId}.jpg`;
+    link.download = 'kurochka.jpg';
     document.body.appendChild(link);
     link.click();
     link.remove();
