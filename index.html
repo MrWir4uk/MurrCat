@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#fff9f2" />
+    <meta name="description" content="Безкоштовний генератор випадкових котиків. Зберігай фото, додавай улюблених та збільшуй котиків просто з телефона." />
+    <title>МурКотик — випадкові котики 🐈</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/style.css" />
+    <script defer src="/script.js"></script>
+  </head>
+  <body>
+    <div class="ambient ambient-one" aria-hidden="true"></div>
+    <div class="ambient ambient-two" aria-hidden="true"></div>
+
+    <div class="page-shell">
+      <header class="topbar">
+        <a href="/" class="brand" aria-label="МурКотик — головна">
+          <span class="brand-icon" aria-hidden="true">🐾</span>
+          <span>мур<span class="brand-accent">котик</span><span class="brand-period">.</span></span>
+        </a>
+        <span class="topbar-pill"><span class="online-dot" aria-hidden="true"></span> маленька порція щастя</span>
+      </header>
+
+      <main>
+        <section class="hero" aria-labelledby="hero-title">
+          <div class="hero-copy">
+            <span class="eyebrow"><span aria-hidden="true">✦</span> МІСЦЕ, ДЕ ЖИВУТЬ КОТИКИ</span>
+            <h1 id="hero-title">Ще одного<br /> <em>котика?</em> <span class="hero-heart" aria-hidden="true">♥</span></h1>
+            <p>Тут немає поганого настрою — тільки випадкові пухнастики, яких можна зберегти, роздивитися та полюбити.</p>
+            <div class="hero-chips" aria-label="Можливості сайту">
+              <span>✳ без реєстрації</span>
+              <span>♡ зберігай улюблених</span>
+              <span>↗ зручно з телефона</span>
+            </div>
+          </div>
+          <div class="hero-decor" aria-hidden="true">
+            <div class="hero-sticker sticker-top">100%<br /><strong>мур!</strong></div>
+            <div class="hero-doodle">ฅ^•ﻌ•^ฅ</div>
+            <div class="hero-sticker sticker-bottom">CAUTION:<br />дуже мило ✿</div>
+            <span class="decor-sparkle decor-sparkle-one">✳</span>
+            <span class="decor-sparkle decor-sparkle-two">✦</span>
+          </div>
+        </section>
+
+        <section class="content-grid" aria-label="Генератор і колекція котиків">
+          <div class="photo-card">
+            <div class="card-topline">
+              <div class="card-label"><span class="label-star" aria-hidden="true">✷</span> Твій випадковий котик <span id="cat-number" class="card-count">#001</span></div>
+              <span class="random-label">пухнаста випадковість</span>
+            </div>
+
+            <div id="photo-stage" class="photo-stage" aria-busy="false">
+              <div id="photo-placeholder" class="photo-placeholder">
+                <span class="placeholder-illustration" aria-hidden="true">🐱</span>
+                <strong>Тут оселиться котик</strong>
+                <span>Він уже десь біжить до тебе...</span>
+              </div>
+              <img id="cat-image" class="cat-image" alt="Випадковий котик" hidden />
+              <div id="loading-overlay" class="loading-overlay" hidden aria-label="Завантаження котика">
+                <div class="spinner" aria-hidden="true"></div>
+                <span>Шукаємо пухнастика...</span>
+              </div>
+              <button id="open-viewer" type="button" class="expand-photo" aria-label="Розгорнути фото та збільшити" title="Збільшити фото" hidden>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3m13-5h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3m13-5v3a2 2 0 0 1-2 2h-3" /></svg>
+              </button>
+            </div>
+
+            <div class="photo-buttons">
+              <button id="new-cat" type="button" class="btn btn-primary">
+                <span class="btn-emoji" aria-hidden="true">✦</span>
+                <span>Ще котика!</span>
+                <span class="btn-arrow" aria-hidden="true">↗</span>
+              </button>
+              <button id="download-cat" type="button" class="btn btn-secondary" disabled>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" /></svg>
+                <span>Зберегти</span>
+              </button>
+              <button id="favorite-cat" type="button" class="btn btn-icon" aria-label="Додати котика в улюблені" aria-pressed="false" disabled>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z" /></svg>
+              </button>
+            </div>
+            <p id="status-text" class="status-text" role="status" aria-live="polite">Натисни на фото, щоб збільшити його 🔍</p>
+          </div>
+
+          <aside class="collection-card" aria-labelledby="collection-title">
+            <div class="collection-head">
+              <div>
+                <span class="section-kicker">МІНІ-АЛЬБОМ</span>
+                <h2 id="collection-title">Котяча колекція <span aria-hidden="true">✿</span></h2>
+              </div>
+              <span id="collection-count" class="collection-count">0</span>
+            </div>
+            <p class="collection-subtitle">Твої останні котики та ті, що запали в серденько.</p>
+            <div class="tabs" role="tablist" aria-label="Фільтр колекції">
+              <button id="tab-recent" type="button" class="tab is-active" role="tab" aria-selected="true" aria-controls="gallery">Нещодавні</button>
+              <button id="tab-favorites" type="button" class="tab" role="tab" aria-selected="false" aria-controls="gallery">♡ Улюблені</button>
+            </div>
+            <div id="gallery" class="gallery" role="tabpanel" aria-labelledby="tab-recent"></div>
+            <div class="collection-note"><span aria-hidden="true">♡</span> Колекція зберігається тільки в цьому браузері.</div>
+          </aside>
+        </section>
+      </main>
+
+      <footer class="footer"><span>Зроблено з любов'ю до котиків <span aria-hidden="true">♥</span></span><span>Кожен котик — маленький сюрприз.</span></footer>
+    </div>
+
+    <dialog id="viewer" class="viewer" aria-label="Перегляд і масштабування фото котика">
+      <div class="viewer-topbar">
+        <div class="viewer-title"><span aria-hidden="true">🐾</span> Котик у всій красі <span class="viewer-shortcut">· потягни / збільшуй</span></div>
+        <button id="viewer-close" type="button" class="viewer-icon" aria-label="Закрити перегляд">✕</button>
+      </div>
+      <div id="viewer-area" class="viewer-area" aria-label="Фото котика; можна збільшити двома пальцями">
+        <img id="viewer-image" src="" alt="Котик великим планом" draggable="false" />
+        <div id="viewer-tip" class="viewer-tip">Два пальці — зум · Один — пересування</div>
+      </div>
+      <div class="viewer-bottombar">
+        <div class="zoom-group" aria-label="Масштаб фото">
+          <button id="zoom-out" type="button" aria-label="Віддалити фото">−</button>
+          <button id="zoom-reset" type="button" aria-label="Повернути початковий масштаб">100%</button>
+          <button id="zoom-in" type="button" aria-label="Наблизити фото">+</button>
+        </div>
+        <div class="viewer-extra">
+          <button id="viewer-clean" type="button" class="viewer-action">◱ <span>Для скріну</span></button>
+          <button id="viewer-download" type="button" class="viewer-action viewer-download">↓ <span>Зберегти</span></button>
+        </div>
+      </div>
+      <button id="viewer-restore" type="button" class="viewer-restore" aria-label="Показати елементи керування" hidden>Показати кнопки</button>
+    </dialog>
+  </body>
+</html>
